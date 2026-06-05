@@ -1,0 +1,4 @@
+export const AUTH_PROVIDER = {
+  GOOGLE: "GOOGLE",
+  CREDENTIALS: "CREDENTIALS",
+};
