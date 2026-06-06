@@ -1,16 +1,16 @@
 import crypto from "crypto";
 
+import { createUserWithAccount } from "../repositories/auth.repository.js";
+
 import {
   findUserById,
   findUserByEmail,
-  createUser,
 } from "../repositories/user.repository.js";
-
-import { createAccount } from "../repositories/account.repository.js";
 
 import {
   createRefreshToken,
   findRefreshToken,
+  deleteRefreshToken,
   deleteUserRefreshTokens,
 } from "../repositories/refreshToken.repository.js";
 
@@ -22,44 +22,56 @@ import {
   verifyRefreshToken,
 } from "../utils/jwt.js";
 
-import { AUTH_PROVIDER } from "../constants/auth.constants.js";
+import { ApiError } from "../utils/ApiError.js";
+
+import {
+  AUTH_PROVIDER,
+  REFRESH_TOKEN_EXPIRY_MS,
+} from "../constants/auth.constants.js";
 
 const hashToken = (token) => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
 
-export const signup = async ({ email, password, name }) => {
-  const existingUser = await findUserByEmail(email);
-
-  if (existingUser) {
-    throw new Error("User already exists");
-  }
-
-  const passwordHash = await hashPassword(password);
-
-  const user = await createUser({
-    email,
-    passwordHash,
-    name,
-  });
-
-  await createAccount({
-    userId: user.id,
-    provider: AUTH_PROVIDER.CREDENTIALS,
-    providerAccountId: user.email,
-  });
-
-  const accessToken = generateAccessToken(user);
+const createAndStoreRefreshToken = async (user) => {
   const refreshToken = generateRefreshToken(user);
 
   await createRefreshToken({
     userId: user.id,
     tokenHash: hashToken(refreshToken),
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
   });
 
+  return refreshToken;
+};
+
+const sanitizeUser = (user) => {
+  const { passwordHash, ...safeUser } = user;
+  return safeUser;
+};
+
+export const register = async ({ email, password, name }) => {
+  const existingUser = await findUserByEmail(email);
+
+  if (existingUser) {
+    throw new ApiError(409, "User already exists");
+  }
+
+  const passwordHash = await hashPassword(password);
+
+  const user = await createUserWithAccount({
+    email,
+    passwordHash,
+    name,
+    provider: AUTH_PROVIDER.CREDENTIALS,
+    providerAccountId: email,
+  });
+
+  const accessToken = generateAccessToken(user);
+  const refreshToken = await createAndStoreRefreshToken(user);
+
   return {
-    user,
+    user: sanitizeUser(user),
     accessToken,
     refreshToken,
   };
@@ -69,60 +81,66 @@ export const login = async ({ email, password }) => {
   const user = await findUserByEmail(email);
 
   if (!user) {
-    throw new Error("Invalid credentials");
+    throw new ApiError(401, "Invalid credentials");
   }
 
   if (!user.passwordHash) {
-    throw new Error("This account uses OAuth authentication");
+    throw new ApiError(400, "This account uses OAuth authentication");
   }
 
   const isPasswordValid = await comparePassword(password, user.passwordHash);
 
   if (!isPasswordValid) {
-    throw new Error("Invalid credentials");
+    throw new ApiError(401, "Invalid credentials");
   }
 
   const accessToken = generateAccessToken(user);
-  const refreshToken = generateRefreshToken(user);
-
-  await createRefreshToken({
-    userId: user.id,
-    tokenHash: hashToken(refreshToken),
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-  });
+  const refreshToken = await createAndStoreRefreshToken(user);
 
   return {
-    user,
+    user: sanitizeUser(user),
     accessToken,
     refreshToken,
   };
 };
 
 export const refreshAccessToken = async (refreshToken) => {
-  const payload = verifyRefreshToken(refreshToken);
+  let payload;
+
+  try {
+    payload = verifyRefreshToken(refreshToken);
+  } catch {
+    throw new ApiError(401, "Invalid refresh token");
+  }
 
   const tokenHash = hashToken(refreshToken);
 
   const storedToken = await findRefreshToken(tokenHash);
 
   if (!storedToken) {
-    throw new Error("Invalid refresh token");
+    throw new ApiError(401, "Invalid refresh token");
   }
 
   if (storedToken.expiresAt < new Date()) {
-    throw new Error("Refresh token expired");
+    await deleteRefreshToken(tokenHash);
+
+    throw new ApiError(401, "Refresh token expired");
   }
 
   const user = await findUserById(payload.userId);
 
   if (!user) {
-    throw new Error("User not found");
+    throw new ApiError(404, "User not found");
   }
 
-  const accessToken = generateAccessToken(user);
+  await deleteRefreshToken(tokenHash);
+
+  const newAccessToken = generateAccessToken(user);
+  const newRefreshToken = await createAndStoreRefreshToken(user);
 
   return {
-    accessToken,
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
   };
 };
 
