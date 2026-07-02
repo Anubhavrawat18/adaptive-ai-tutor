@@ -12,21 +12,31 @@ enum AuthProvider {
   CREDENTIALS
 }
 
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum RoadmapStatus {
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
 model User {
   id              String   @id @default(cuid())
   email           String   @unique
   name            String?
   avatarUrl       String?
-
   passwordHash    String?
   isEmailVerified Boolean  @default(false)
-
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-
   accounts        Account[]
   refreshTokens   RefreshToken[]
   passwordResets  PasswordResetToken[]
+  roadmaps Roadmap[]
 }
 
 model Account {
@@ -34,11 +44,8 @@ model Account {
   userId            String
   provider          AuthProvider
   providerAccountId String
-
   createdAt         DateTime     @default(now())
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([provider, providerAccountId])
   @@index([userId])
 }
@@ -46,27 +53,62 @@ model Account {
 model RefreshToken {
   id         String   @id @default(cuid())
   tokenHash  String   @unique
-
   userId     String
   expiresAt  DateTime
-
   createdAt  DateTime @default(now())
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@index([userId])
 }
 
 model PasswordResetToken {
   id         String   @id @default(cuid())
   tokenHash  String   @unique
-
   userId     String
   expiresAt  DateTime
-
   createdAt  DateTime @default(now())
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@index([userId])
+}
+
+
+model Roadmap {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  goal        String
+  level       String?
+  progress Float @default(0)
+  status      RoadmapStatus @default(IN_PROGRESS)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sections     RoadmapSection[]
+  @@index([userId])
+}
+
+model RoadmapSection {
+  id          String @id @default(cuid())
+  roadmapId   String
+  title       String
+  description String?
+  displayOrder    Int
+  roadmap Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  tasks RoadmapTask[]
+  @@index([roadmapId])
+}
+
+model RoadmapTask {
+  id            String @id @default(cuid())
+  sectionId      String
+  title          String
+  description    String?
+  displayOrder   Int
+  estimatedHours Int?
+  status TaskStatus @default(NOT_STARTED)
+  completedAt    DateTime?
+  taskType       String?
+  resources      Json?
+  section RoadmapSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  @@index([sectionId])
 }

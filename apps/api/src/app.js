@@ -4,8 +4,10 @@ import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 
+// service routes
 import authRoutes from "./modules/auth/auth.routes.js";
 import userRoutes from "./modules/user/user.routes.js";
+import roadmapRoutes from "./modules/roadmap/roadmap.routes.js";
 
 import { errorMiddleware } from "./middleware/error.middleware.js";
 
@@ -26,6 +28,8 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 // USER ROUTES
 app.use("/api/users", userRoutes);
+// ROADMAP ROUTES
+app.use("/api/roadmaps", roadmapRoutes);
 
 app.use(errorMiddleware);
 
