@@ -27,3 +27,31 @@ export const createUserWithAccount = async ({
     return user;
   });
 };
+
+export const createGoogleUserWithAccount = async ({
+  email,
+  name,
+  avatarUrl,
+  providerAccountId,
+}) => {
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        email,
+        name,
+        avatarUrl,
+        isEmailVerified: true,
+      },
+    });
+
+    await tx.account.create({
+      data: {
+        userId: user.id,
+        provider: "GOOGLE",
+        providerAccountId,
+      },
+    });
+
+    return user;
+  });
+};

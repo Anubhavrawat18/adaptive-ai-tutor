@@ -24,32 +24,23 @@ import {
 
 import { ApiError } from "../utils/ApiError.js";
 
+import { createGoogleUserWithAccount } from "../repositories/auth.repository.js";
+
+import { findAccount } from "../repositories/account.repository.js";
+
 import {
   AUTH_PROVIDER,
   REFRESH_TOKEN_EXPIRY_MS,
 } from "../constants/auth.constants.js";
 
-const hashToken = (token) => {
-  return crypto.createHash("sha256").update(token).digest("hex");
-};
-
-const createAndStoreRefreshToken = async (user) => {
-  const refreshToken = generateRefreshToken(user);
-
-  await createRefreshToken({
-    userId: user.id,
-    tokenHash: hashToken(refreshToken),
-    expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
-  });
-
-  return refreshToken;
-};
+import { issueTokens, hashRefreshToken } from "./token.service.js";
 
 const sanitizeUser = (user) => {
   const { passwordHash, ...safeUser } = user;
   return safeUser;
 };
 
+// email-password Auth
 export const register = async ({ email, password, name }) => {
   const existingUser = await findUserByEmail(email);
 
@@ -67,8 +58,7 @@ export const register = async ({ email, password, name }) => {
     providerAccountId: email,
   });
 
-  const accessToken = generateAccessToken(user);
-  const refreshToken = await createAndStoreRefreshToken(user);
+  const { accessToken, refreshToken } = await issueTokens(user);
 
   return {
     user: sanitizeUser(user),
@@ -94,8 +84,7 @@ export const login = async ({ email, password }) => {
     throw new ApiError(401, "Invalid credentials");
   }
 
-  const accessToken = generateAccessToken(user);
-  const refreshToken = await createAndStoreRefreshToken(user);
+  const { accessToken, refreshToken } = await issueTokens(user);
 
   return {
     user: sanitizeUser(user),
@@ -113,7 +102,7 @@ export const refreshAccessToken = async (refreshToken) => {
     throw new ApiError(401, "Invalid refresh token");
   }
 
-  const tokenHash = hashToken(refreshToken);
+  const tokenHash = hashRefreshToken(refreshToken);
 
   const storedToken = await findRefreshToken(tokenHash);
 
@@ -135,13 +124,7 @@ export const refreshAccessToken = async (refreshToken) => {
 
   await deleteRefreshToken(tokenHash);
 
-  const newAccessToken = generateAccessToken(user);
-  const newRefreshToken = await createAndStoreRefreshToken(user);
-
-  return {
-    accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
-  };
+  return await issueTokens(user);
 };
 
 export const logout = async (userId) => {
@@ -149,5 +132,37 @@ export const logout = async (userId) => {
 
   return {
     message: "Logged out successfully",
+  };
+};
+
+// Google OAuth
+export const googleLogin = async (profile) => {
+  const googleId = profile.id;
+
+  const email = profile.emails?.[0]?.value;
+  const name = profile.displayName;
+  const avatarUrl = profile.photos?.[0]?.value;
+
+  let account = await findAccount("GOOGLE", googleId);
+
+  let user;
+
+  if (account) {
+    user = account.user;
+  } else {
+    user = await createGoogleUserWithAccount({
+      email,
+      name,
+      avatarUrl,
+      providerAccountId: googleId,
+    });
+  }
+
+  const { accessToken, refreshToken } = await issueTokens(user);
+
+  return {
+    user: sanitizeUser(user),
+    accessToken,
+    refreshToken,
   };
 };

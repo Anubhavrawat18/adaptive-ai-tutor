@@ -11,5 +11,11 @@
     "dev:workers": "npm run dev --workspace=workers",
     "build": "npm run build --workspaces",
     "lint": "npm run lint --workspaces"
+  },
+  "dependencies": {
+    "express-session": "^1.19.0",
+    "google-auth-library": "^10.9.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
   }
 }

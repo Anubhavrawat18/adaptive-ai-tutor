@@ -4,6 +4,8 @@ import {
   clearRefreshTokenCookie,
 } from "../../utils/cookies.js";
 
+import passport from "./passport.js";
+
 export const register = async (req, res) => {
   const { user, accessToken, refreshToken } = await authService.register(
     req.body,
@@ -59,4 +61,18 @@ export const logout = async (req, res) => {
     success: true,
     message: "Logged out successfully",
   });
+};
+
+// Google OAuth
+export const googleCallback = async (req, res) => {
+  const { user, accessToken, refreshToken } = await authService.googleLogin(
+    req.user,
+  );
+
+  setRefreshTokenCookie(res, refreshToken);
+
+  // We'll replace this with the frontend URL later
+  return res.redirect(
+    `${process.env.FRONTEND_URL}/oauth-success?token=${accessToken}`,
+  );
 };
