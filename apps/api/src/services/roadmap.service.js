@@ -1,18 +1,29 @@
 import {
   createRoadmap,
+  createRoadmapWithContent,
   getRoadmapsByUserId,
   getRoadmapById,
   updateRoadmap,
   deleteRoadmap,
 } from "../repositories/roadmap.repository.js";
 
+import { generateRoadmap as generateAIRoadmap } from "../ai/ai.service.js";
 import { ApiError } from "../utils/ApiError.js";
 
-export const createRoadmapForUser = async (userId, data) => {
-  return createRoadmap({
-    ...data,
-    userId,
+export const generateRoadmapForUser = async (
+  userId,
+  { goal, level, duration },
+) => {
+  const roadmap = await generateAIRoadmap({
+    goal,
+    level,
+    duration,
   });
+
+  roadmap.goal = goal;
+  roadmap.level = level;
+
+  return await createRoadmapWithContent(userId, roadmap);
 };
 
 export const getUserRoadmaps = async (userId) => {

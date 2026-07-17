@@ -14,7 +14,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.post("/", createRoadmap);
+router.post("/generate", generateRoadmapWithAI);
 
 router.get("/", getRoadmaps);
 

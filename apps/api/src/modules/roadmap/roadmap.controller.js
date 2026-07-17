@@ -1,7 +1,8 @@
 import * as roadmapService from "../../services/roadmap.service.js";
 
-export const createRoadmap = async (req, res) => {
-  const roadmap = await roadmapService.createRoadmapForUser(
+// AI Roadmap
+export const generateRoadmapWithAI = async (req, res) => {
+  const roadmap = await roadmapService.generateRoadmapForUser(
     req.user.userId,
     req.body,
   );
